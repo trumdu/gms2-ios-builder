@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GameMaker iOS Xcode & IPA Auto-Builder Script
-=============================================
+GameMaker Studio 2 — iOS Xcode & IPA Auto-Builder Script
+========================================================
 Developer / Author: yearningss (https://github.com/yearningss)
 GitHub: https://github.com/yearningss
 
-Автоматический скрипт компиляции проектов GameMaker Studio 2 в проект Xcode
-и отправки на GitHub Actions для автоматической сборки неподписанного .ipa файла.
-Поддерживает режим VM (GMS2 VM) и YYC (GMS2 YYC), глубокий поиск Igor CLI,
-создание единой папки Build_iOS и авто-очистку временных файлов!
+An automated CLI tool to compile GameMaker Studio 2 projects into Xcode projects
+(VM & YYC) and push to GitHub Actions for automated unsigned .ipa packaging.
 """
 
 __author__ = "yearningss"
@@ -22,7 +20,7 @@ import subprocess
 import shutil
 import webbrowser
 
-# Настройка кодировки для Windows консоли
+# Enable UTF-8 encoding for Windows Console
 if sys.stdout.encoding != 'utf-8':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -133,26 +131,26 @@ def print_banner():
 
 def print_sideloadly_instructions(actions_url):
     print("\n" + "=" * 65)
-    print("🎉 УСПЕХ! Проект загружен и собирается на GitHub Actions!")
+    print("🎉 SUCCESS! Project uploaded & building on GitHub Actions!")
     print("=" * 65)
-    print("👨‍💻 Разработчик скрипта: yearningss (https://github.com/yearningss)")
-    print(f"🔗 Ссылка на статус сборки: {actions_url}")
+    print("👨‍💻 Script Developer: yearningss (https://github.com/yearningss)")
+    print(f"🔗 Build Status Link: {actions_url}")
     print("\n-----------------------------------------------------------------")
-    print("📥 КАК СКАЧАТЬ ГОТОВЫЙ .IPA ФАЙЛ:")
-    print("1. Перейдите по ссылке выше (страница откроется автоматически).")
-    print("2. Кликните на самый верхний (свежий) запуск сборки.")
-    print("3. Прокрутите вниз страницы до раздела 'Artifacts' (Артефакты).")
-    print("4. Нажмите на 'Unsigned-iOS-IPA' для скачивания архива с вашей игрой.")
-    print("5. Распакуйте скачанный архив — внутри будет файл 'UnsignedApp.ipa'.")
+    print("📥 HOW TO DOWNLOAD YOUR FINISHED .IPA FILE:")
+    print("1. Go to the link above (opened automatically in your browser).")
+    print("2. Click on the latest workflow run at the top of the list.")
+    print("3. Scroll down to the 'Artifacts' section at the bottom of the page.")
+    print("4. Click 'Unsigned-iOS-IPA' to download the zip archive.")
+    print("5. Extract the downloaded zip file — inside you will find 'UnsignedApp.ipa'.")
     print("-----------------------------------------------------------------")
-    print("📲 КАК УСТАНОВИТЬ ИГРУ НА IPHONE / IPAD ЧЕРЕЗ SIDELOADLY:")
-    print("1. Скачайте программу Sideloadly с официального сайта: https://sideloadly.io")
-    print("2. Подключите ваш iPhone / iPad к компьютеру через USB-кабель.")
-    print("3. Запустите Sideloadly и перетащите файл 'UnsignedApp.ipa' в окно программы.")
-    print("4. В поле 'Apple ID' укажите вашу учетную запись Apple.")
-    print("5. Нажмите кнопку 'Start' для установки игры на устройство.")
-    print("6. На iPhone откройте: Настройки -> Основные -> VPN и управление устройством.")
-    print("7. Нажмите на ваш Apple ID и выберите 'Доверять'. Готово! 🎮")
+    print("📲 HOW TO INSTALL ON IPHONE / IPAD VIA SIDELOADLY:")
+    print("1. Download Sideloadly from the official website: https://sideloadly.io")
+    print("2. Connect your iPhone / iPad to your computer via USB cable.")
+    print("3. Open Sideloadly and drag & drop 'UnsignedApp.ipa' into the window.")
+    print("4. In the 'Apple ID' field, enter your Apple account email.")
+    print("5. Click 'Start' to install the app onto your device.")
+    print("6. On your iOS device: Settings -> General -> VPN & Device Management.")
+    print("7. Tap your Apple ID and select 'Trust'. Enjoy! 🎮")
     print("=" * 65 + "\n")
 
 def run_command(cmd, cwd=None):
@@ -161,7 +159,7 @@ def run_command(cmd, cwd=None):
     return res.returncode == 0
 
 def find_gamemaker_paths():
-    """ Глубокий поиск путей к Igor CLI, Runtime, Prefabs и профилю пользователя """
+    """ Deep multi-directory search for Igor CLI, Runtimes, Prefabs, and User License """
     igor_path = None
     runtime_path = None
     prefabs_path = None
@@ -173,7 +171,7 @@ def find_gamemaker_paths():
         localappdata = os.environ.get("LOCALAPPDATA", "")
         programdata = os.environ.get("PROGRAMDATA", "C:\\ProgramData")
 
-        # 1. Поиск Runtime & Igor.exe
+        # 1. Search for Runtimes & Igor.exe
         rt_patterns = [
             os.path.join(programdata, "GameMakerStudio2*", "Cache", "runtimes", "runtime-*"),
             os.path.join(localappdata, "GameMakerStudio2*", "Cache", "runtimes", "runtime-*"),
@@ -193,7 +191,7 @@ def find_gamemaker_paths():
             if not os.path.exists(igor_path):
                 igor_path = os.path.join(runtime_path, "bin", "igor", "windows", "x86", "Igor.exe")
 
-        # Глубокий поиск Igor.exe если стандартные пути не сработали
+        # Fallback deep search if standard paths didn't match
         if not igor_path or not os.path.exists(igor_path):
             deep_search = (
                 glob.glob(os.path.join(programdata, "**", "Igor.exe"), recursive=True) +
@@ -204,7 +202,7 @@ def find_gamemaker_paths():
                 igor_path = deep_search[0]
                 runtime_path = os.path.abspath(os.path.join(os.path.dirname(igor_path), "..", "..", ".."))
 
-        # 2. Поиск Prefabs
+        # 2. Search for Prefabs
         prefab_patterns = [
             os.path.join(programdata, "GameMakerStudio2*", "Prefabs"),
             os.path.join(localappdata, "GameMakerStudio2*", "Prefabs"),
@@ -216,7 +214,7 @@ def find_gamemaker_paths():
                 prefabs_path = matches[0]
                 break
 
-        # 3. Поиск профиля пользователя
+        # 3. Search for User Profile
         user_patterns = [
             os.path.join(appdata, "GameMakerStudio2*"),
             os.path.join(localappdata, "GameMakerStudio2*")
@@ -249,61 +247,61 @@ def find_gamemaker_paths():
 def main():
     print_banner()
 
-    # 1. Запрос пути к проекту .yyp
-    yyp_input = input("\n[1] Введите путь к файлу проекта (.yyp) или перетащите его сюда: ").strip(' "\'')
+    # 1. Prompt for .yyp project path
+    yyp_input = input("\n[1] Enter path to your GameMaker project (.yyp file or folder): ").strip(' "\'')
 
     if not yyp_input:
-        print("[!] Путь не указан. Выход.")
+        print("[!] Path not specified. Exiting.")
         return
 
     if os.path.isdir(yyp_input):
         yyp_files = glob.glob(os.path.join(yyp_input, "*.yyp"))
         if not yyp_files:
-            print("[!] Ошибка: В указанной папке не найден файл .yyp!")
+            print("[!] Error: No .yyp project file found in specified directory!")
             return
         yyp_path = yyp_files[0]
     else:
         yyp_path = yyp_input
 
     if not os.path.exists(yyp_path) or not yyp_path.endswith(".yyp"):
-        print(f"[!] Ошибка: Файл '{yyp_path}' не существует или не является проектом .yyp!")
+        print(f"[!] Error: File '{yyp_path}' does not exist or is not a .yyp project!")
         return
 
     project_dir = os.path.dirname(os.path.abspath(yyp_path))
-    print(f"[+] Проект найден: {yyp_path}")
+    print(f"[+] Project found: {yyp_path}")
 
-    # 2. Выбор режима компилятора (VM vs YYC)
-    print("\n[2] Выберите режим компилятора Output:")
-    print("  1. GMS2 VM  (Interpreted / Виртуальная машина)")
+    # 2. Compiler Output mode selection (VM vs YYC)
+    print("\n[2] Select Output Compiler Mode:")
+    print("  1. GMS2 VM  (Interpreted / Virtual Machine)")
     print("  2. GMS2 YYC (YoYo C++ Compiler)")
-    mode_input = input("Выберите режим (1 или 2) [по умолчанию 1]: ").strip()
+    mode_input = input("Select mode (1 or 2) [default 1]: ").strip()
 
     is_yyc = (mode_input == "2")
     mode_str = "GMS2 YYC (C++)" if is_yyc else "GMS2 VM (Interpreted)"
-    print(f"[+] Выбран режим: {mode_str}")
+    print(f"[+] Selected mode: {mode_str}")
 
-    # 3. Глубокий поиск GameMaker окружения
-    print("\n[3] Глубокий поиск установленного Igor CLI и окружения GameMaker...")
+    # 3. Environment Deep Search
+    print("\n[3] Deep searching for installed Igor CLI and GameMaker environment...")
     igor_path, runtime_path, prefabs_path, user_dir, licence_file = find_gamemaker_paths()
 
     if not igor_path or not os.path.exists(igor_path):
-        igor_path = input("[?] Igor CLI не найден автоматически. Укажите путь к Igor.exe / Igor: ").strip(' "\'')
+        igor_path = input("[?] Igor CLI not found automatically. Enter path to Igor.exe / Igor: ").strip(' "\'')
 
     if not runtime_path or not os.path.exists(runtime_path):
-        runtime_path = input("[?] Путь к GameMaker Runtime не найден. Укажите путь (папка runtime-X.X.X): ").strip(' "\'')
+        runtime_path = input("[?] GameMaker Runtime path not found. Enter path (runtime-X.X.X folder): ").strip(' "\'')
 
     print(f"  * Igor CLI: {igor_path}")
     print(f"  * Runtime: {runtime_path}")
     if prefabs_path:
         print(f"  * Prefabs: {prefabs_path}")
     if licence_file:
-        print(f"  * Лицензия: {licence_file}")
+        print(f"  * Licence: {licence_file}")
 
-    # 4. Компиляция в единую папку Build_iOS через Igor
+    # 4. Compile to Build_iOS unified directory via Igor
     output_xcode_dir = os.path.join(project_dir, "Build_iOS")
     os.makedirs(output_xcode_dir, exist_ok=True)
 
-    print(f"\n[4] Запуск компиляции в папку Build_iOS ({mode_str})...")
+    print(f"\n[4] Compiling project to Build_iOS folder ({mode_str})...")
 
     runtime_flag = "-r=YYC" if is_yyc else "-r=VM"
 
@@ -330,16 +328,16 @@ def main():
     success = run_command(compile_cmd, cwd=project_dir)
 
     if not success:
-        print("[!] Ошибка при компиляции проекта через Igor CLI!")
+        print("[!] Error during Igor CLI compilation!")
         return
 
-    print("\n[+] Сборка Xcode проекта в папке Build_iOS завершена успешно!")
+    print("\n[+] Xcode project compilation completed successfully!")
 
-    # Поиск созданного .xcodeproj
+    # Locate generated .xcodeproj
     xcode_proj_dirs = glob.glob(os.path.join(output_xcode_dir, "**", "*.xcodeproj"), recursive=True)
     if xcode_proj_dirs:
         target_export_folder = os.path.dirname(xcode_proj_dirs[0])
-        print(f"[+] Проект Xcode готов в: {target_export_folder}")
+        print(f"[+] Xcode project ready in: {target_export_folder}")
         try:
             if sys.platform == "win32":
                 os.startfile(target_export_folder)
@@ -349,29 +347,29 @@ def main():
             pass
     else:
         target_export_folder = output_xcode_dir
-        print(f"[+] Папка сборки: {output_xcode_dir}")
+        print(f"[+] Build folder: {output_xcode_dir}")
 
-    # 5. Вопрос про отправку на GitHub для сборки .ipa
-    answer = input("\n[5] Хотите собрать .ipa файл через GitHub Actions? (д/н | y/n): ").strip().lower()
+    # 5. Prompt for GitHub Actions .ipa packaging
+    answer = input("\n[5] Do you want to build an unsigned .ipa file via GitHub Actions? (y/n): ").strip().lower()
 
     if answer not in ['y', 'yes', 'д', 'да']:
-        print("[+] Готовый проект Xcode сохранен локально в папке Build_iOS!")
+        print("[+] Finished Xcode project saved locally in Build_iOS folder!")
         return
 
-    # 6. Проверка Git и Git LFS
-    print("\n[6] Проверка установленного Git и авторизации...")
+    # 6. Check Git & Git LFS
+    print("\n[6] Checking Git and Git LFS installation...")
 
     git_check = subprocess.run("git --version", shell=True, capture_output=True, text=True)
     if git_check.returncode != 0:
-        print("[!] Ошибка: Git не установлен на вашем компьютере!")
-        print(" -> Пожалуйста, установите Git с официального сайта: https://git-scm.com/")
+        print("[!] Error: Git is not installed on your computer!")
+        print(" -> Please install Git from the official website: https://git-scm.com/")
         webbrowser.open("https://git-scm.com/downloads")
         return
     print(f"  * {git_check.stdout.strip()}")
 
     lfs_check = subprocess.run("git lfs --version", shell=True, capture_output=True, text=True)
     if lfs_check.returncode != 0:
-        print("[!] Предупреждение: Git LFS не обнаружен. Устанавливаем Git LFS...")
+        print("[!] Warning: Git LFS not detected. Installing Git LFS...")
         run_command("git lfs install")
     else:
         print(f"  * {lfs_check.stdout.strip()}")
@@ -380,29 +378,29 @@ def main():
     git_email = subprocess.run("git config user.email", shell=True, capture_output=True, text=True).stdout.strip()
 
     if not git_user or not git_email:
-        print("\n[!] Внимание: У вас не настроено имя/email в Git.")
-        new_name = input("Введите ваше имя для Git: ").strip()
-        new_email = input("Введите ваш Email для Git: ").strip()
+        print("\n[!] Warning: Git user name/email is not configured.")
+        new_name = input("Enter your Git name: ").strip()
+        new_email = input("Enter your Git email: ").strip()
         run_command(f'git config --global user.name "{new_name}"')
         run_command(f'git config --global user.email "{new_email}"')
 
-    # 7. Запрос ссылки на GitHub репозиторий с рекомендацией создать новый
-    print("\n[7] Настройка GitHub репозитория...")
+    # 7. GitHub Repository setup prompt
+    print("\n[7] GitHub Repository Configuration...")
     print("=" * 65)
-    print("⚠️  НАСТОЯТЕЛЬНО РЕКОМЕНДУЕТСЯ СОЗДАТЬ НОВЫЙ ЧИСТЫЙ РЕПОЗИТОРИЙ НА GITHUB!")
-    print("    Это защитит ваш основной репозиторий с исходниками от загрязнения.")
-    print("    Создайте новый публичный/приватный репозиторий на https://github.com/new")
-    print("    Пример ссылки: https://github.com/username/my-app-ios-build.git")
+    print("⚠️  RECOMMENDED: CREATE A NEW CLEAN REPOSITORY ON GITHUB!")
+    print("    This protects your main source code repository from build artifacts.")
+    print("    Create a new repository at: https://github.com/new")
+    print("    Example URL: https://github.com/username/gms2-ios-build.git")
     print("=" * 65)
 
-    repo_url = input("\nВведите URL вашего нового GitHub репозитория: ").strip()
+    repo_url = input("\nEnter your new GitHub Repository URL: ").strip()
 
     if not repo_url.startswith("http") and not repo_url.startswith("git@"):
-        print("[!] Ошибка: Введен некорректный URL репозитория!")
+        print("[!] Error: Invalid repository URL entered!")
         return
 
-    # 8. Подготовка структуры файлов для загрузки на GitHub
-    print("\n[8] Подготовка репозитория и файлов сборки...")
+    # 8. Prepare repository files
+    print("\n[8] Preparing repository and build files...")
 
     workflow_dir = os.path.join(target_export_folder, ".github", "workflows")
     os.makedirs(workflow_dir, exist_ok=True)
@@ -424,39 +422,39 @@ def main():
     run_command("git lfs track \"*.cpp\"", cwd=target_export_folder)
     run_command("git lfs track \"*.h\"", cwd=target_export_folder)
     
-    # Сброс и привязка remote
+    # Configure remote
     run_command("git remote remove origin", cwd=target_export_folder)
     run_command(f'git remote add origin "{repo_url}"', cwd=target_export_folder)
     run_command("git branch -M main", cwd=target_export_folder)
 
-    print("\n[9] Индексация файлов локально (git add .)...")
+    print("\n[9] Indexing files locally (git add .)...")
     run_command("git add .", cwd=target_export_folder)
     run_command(f'git commit -m "Auto-generated Xcode project ({mode_str}) with GitHub Actions iOS build workflow by yearningss"', cwd=target_export_folder)
     
-    print("\n[10] Загрузка ресурсов Git LFS на сервер GitHub (может занять 1-3 минуты)...")
-    print("⏳ Пожалуйста, подождите полного завершения загрузки LFS-объектов...")
+    print("\n[10] Uploading Git LFS resources to GitHub server (may take 1-3 minutes)...")
+    print("⏳ Please wait for LFS object upload to complete 100%...")
     lfs_push_success = run_command("git lfs push origin main --all", cwd=target_export_folder)
 
-    print("\n[11] Синхронизация ветки с GitHub (git push origin main)...")
+    print("\n[11] Pushing branch to GitHub (git push origin main)...")
     push_success = run_command("git push -u origin main --force", cwd=target_export_folder)
 
-    # 12. Проверка подтверждения на сервере (git fetch)
-    print("\n[12] Проверка подтверждения наличия коммита на сервере GitHub...")
+    # 12. Verify receipt on remote
+    print("\n[12] Verifying server receipt on GitHub...")
     fetch_success = run_command("git fetch origin main", cwd=target_export_folder)
 
-    # 13. Авто-очистка промежуточных кэшей
-    print("\n[13] Очистка временных файлов компиляции...")
+    # 13. Clean temporary build caches
+    print("\n[13] Cleaning up temporary build caches...")
     temp_cache = os.path.join(project_dir, "cache")
     if os.path.exists(temp_cache):
         try:
             shutil.rmtree(temp_cache)
-            print("  * Удалены промежуточные файлы кэша (cache/)")
+            print("  * Cleaned temporary cache directory (cache/)")
         except Exception:
             pass
     
     actions_url = repo_url.rstrip(".git") + "/actions"
     
-    # Показ подробной инструкции по скачиванию и установке через Sideloadly
+    # Print post-build instructions & open browser
     print_sideloadly_instructions(actions_url)
     webbrowser.open(actions_url)
 
