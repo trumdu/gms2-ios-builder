@@ -75,7 +75,18 @@ jobs:
           POD_DIR=$(dirname "$PODFILE")
           echo "Found Podfile at $PODFILE"
           cd "$POD_DIR"
-          pod install --repo-update || pod install
+          # AppMetrica pods clone from GitHub; runners sometimes hit transient 443 failures.
+          attempt=1
+          max_attempts=4
+          until pod install --repo-update || pod install; do
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "pod install failed after $max_attempts attempts"
+              exit 1
+            fi
+            echo "pod install failed (attempt $attempt/$max_attempts) — retrying in 30s..."
+            attempt=$((attempt + 1))
+            sleep 30
+          done
 
       - name: Build Unsigned App with xcodebuild
         run: |
