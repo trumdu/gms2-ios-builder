@@ -36,7 +36,7 @@ on:
 
 jobs:
   build-ios:
-    # Yandex/VGSLFundamentals needs Swift `sending` (Xcode 16+); macos-14 = Xcode 15.4 fails.
+    # Yandex/VGSLFundamentals needs SendableMetatype (Xcode 26 / Swift 6.2+).
     runs-on: macos-15
 
     steps:
@@ -45,16 +45,17 @@ jobs:
         with:
           lfs: true
 
-      - name: Select Xcode 16
+      - name: Select Xcode 26 (Swift SendableMetatype)
         run: |
           set -euo pipefail
           echo "Available Xcode apps:"
           ls /Applications | grep -i Xcode || true
-          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer \\
-            || sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer \\
-            || sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer \\
-            || sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer \\
-            || sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer \\
+          # VGSLFundamentals (Yandex) needs SendableMetatype / Swift 6.2 → Xcode 26+
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer \\
             || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
 
