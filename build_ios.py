@@ -36,68 +36,129 @@ on:
 
 jobs:
   build-ios:
-    runs-on: macos-14
+    # Yandex/VGSLFundamentals needs Swift `sending` (Xcode 16+); macos-14 = Xcode 15.4 fails.
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           lfs: true
 
+      - name: Select Xcode 16
+        run: |
+          set -euo pipefail
+          echo "Available Xcode apps:"
+          ls /Applications | grep -i Xcode || true
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer \\
+            || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Setup CocoaPods
+        run: |
+          gem install cocoapods --no-document || true
+          pod --version
+
+      - name: Install CocoaPods dependencies
+        run: |
+          set -euo pipefail
+          PODFILE=$(find . -maxdepth 5 -name "Podfile" | head -n 1 || true)
+          if [ -z "$PODFILE" ]; then
+            echo "No Podfile found — skipping pod install"
+            exit 0
+          fi
+          POD_DIR=$(dirname "$PODFILE")
+          echo "Found Podfile at $PODFILE"
+          cd "$POD_DIR"
+          pod install --repo-update || pod install
+
       - name: Build Unsigned App with xcodebuild
         run: |
-          XCODE_PROJ=$(find . -maxdepth 4 -name "*.xcodeproj" | head -n 1)
-          XCODE_SPACE=$(find . -maxdepth 4 -name "*.xcworkspace" | head -n 1)
-          
+          set -euo pipefail
+          XCODE_SPACE=$(find . -maxdepth 5 -name "*.xcworkspace" ! -path "*/Pods/*" | head -n 1 || true)
+          XCODE_PROJ=$(find . -maxdepth 5 -name "*.xcodeproj" ! -path "*/Pods/*" | head -n 1 || true)
+
           echo "Found Xcode Project: $XCODE_PROJ"
           echo "Found Xcode Workspace: $XCODE_SPACE"
-          
-          mkdir -p build/DerivedData
+
+          mkdir -p build/DerivedData build/Products
+
+          pick_scheme() {
+            local LIST="$1"
+            local S
+            S=$(echo "$LIST" | sed -n '/Schemes:/,/^$/p' | sed '1d' | sed 's/^[[:space:]]*//' | grep -E '^SyndykCardGame$' | head -n 1 || true)
+            if [ -z "$S" ]; then
+              S=$(echo "$LIST" | sed -n '/Schemes:/,/^$/p' | sed '1d' | sed 's/^[[:space:]]*//' | grep -v -E 'Test|Pods|Tests' | head -n 1 || true)
+            fi
+            echo "$S"
+          }
+
+          COMMON_ARGS=(
+            -sdk iphoneos
+            -configuration Release
+            -derivedDataPath "$PWD/build/DerivedData"
+            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGN_IDENTITY=
+            ONLY_ACTIVE_ARCH=NO
+            CONFIGURATION_BUILD_DIR="$PWD/build/Products"
+          )
 
           if [ -n "$XCODE_SPACE" ]; then
-            SCHEME_NAME=$(xcodebuild -workspace "$XCODE_SPACE" -list | grep -A 1 "Schemes:" | tail -n 1 | xargs)
-            echo "Building scheme $SCHEME_NAME from workspace $XCODE_SPACE..."
-            xcodebuild clean build \\
-              -workspace "$XCODE_SPACE" \\
-              -scheme "$SCHEME_NAME" \\
-              -sdk iphoneos \\
-              -configuration Release \\
-              -derivedDataPath build/DerivedData \\
-              CODE_SIGNING_ALLOWED=NO \\
-              CODE_SIGNING_REQUIRED=NO \\
-              CODE_SIGN_IDENTITY=""
+            LIST=$(xcodebuild -workspace "$XCODE_SPACE" -list)
+            SCHEME_NAME=$(pick_scheme "$LIST")
+            echo "Building scheme '$SCHEME_NAME' from workspace $XCODE_SPACE..."
+            xcodebuild build -workspace "$XCODE_SPACE" -scheme "$SCHEME_NAME" "${COMMON_ARGS[@]}"
           elif [ -n "$XCODE_PROJ" ]; then
-            SCHEME_NAME=$(xcodebuild -project "$XCODE_PROJ" -list | grep -A 1 "Schemes:" | tail -n 1 | xargs)
-            echo "Building scheme $SCHEME_NAME from project $XCODE_PROJ..."
-            xcodebuild clean build \\
-              -project "$XCODE_PROJ" \\
-              -scheme "$SCHEME_NAME" \\
-              -sdk iphoneos \\
-              -configuration Release \\
-              -derivedDataPath build/DerivedData \\
-              CODE_SIGNING_ALLOWED=NO \\
-              CODE_SIGNING_REQUIRED=NO \\
-              CODE_SIGN_IDENTITY=""
+            LIST=$(xcodebuild -project "$XCODE_PROJ" -list)
+            SCHEME_NAME=$(pick_scheme "$LIST")
+            echo "Building scheme '$SCHEME_NAME' from project $XCODE_PROJ..."
+            xcodebuild build -project "$XCODE_PROJ" -scheme "$SCHEME_NAME" "${COMMON_ARGS[@]}"
           else
-            echo "Error: Xcode project file (.xcodeproj / .xcworkspace) not found in repository!"
+            echo "Error: Xcode project file (.xcodeproj / .xcworkspace) not found!"
             exit 1
           fi
+
+          echo "=== Products tree (DerivedData) ==="
+          find build/DerivedData/Build/Products -maxdepth 3 -print || true
+          echo "=== Products tree (CONFIGURATION_BUILD_DIR) ==="
+          find build/Products -maxdepth 3 -print || true
 
       - name: Package Unsigned .ipa
         run: |
+          set -euo pipefail
+          rm -rf Payload
           mkdir -p Payload
-          APP_PATH=$(find build/DerivedData -name "*.app" | head -n 1)
-          if [ -d "$APP_PATH" ]; then
-            cp -r "$APP_PATH" Payload/
-            zip -r UnsignedApp.ipa Payload
-            echo "IPA successfully created!"
-          else
+
+          echo "Searching for .app bundles..."
+          find build -type d -name "*.app" -print || true
+
+          APP_PATH=$(find build/Products build/DerivedData/Build/Products -type d -name "SyndykCardGame.app" 2>/dev/null | head -n 1 || true)
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find build -type d -name "*.app" | grep -i 'iphoneos' | grep -v '/PlugIns/' | head -n 1 || true)
+          fi
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find build -type d -name "*.app" | grep -v '/PlugIns/' | head -n 1 || true)
+          fi
+
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
             echo "Error: .app bundle not found!"
+            find build -maxdepth 8 -type d -print | head -n 300 || true
             exit 1
           fi
 
+          echo "Using APP_PATH=$APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload UnsignedApp.ipa
+          ls -lh UnsignedApp.ipa
+          echo "IPA successfully created!"
+
       - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: Unsigned-iOS-IPA
           path: UnsignedApp.ipa
