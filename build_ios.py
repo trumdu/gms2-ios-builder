@@ -164,6 +164,12 @@ jobs:
 
           echo "Using APP_PATH=$APP_PATH"
           cp -R "$APP_PATH" Payload/
+          APP_IN_PAYLOAD=$(find Payload -maxdepth 1 -type d -name "*.app" | head -n 1)
+          echo "Stripping test PlugIns / dSYM / XCTest from $APP_IN_PAYLOAD (Sideloadly cannot sign them)"
+          # Unit-test bundles + debug symbols break free Sideloadly signing (code -69 / macho -40).
+          rm -rf "$APP_IN_PAYLOAD"/PlugIns
+          find "$APP_IN_PAYLOAD" -type d -name "*.dSYM" -prune -exec rm -rf {} + 2>/dev/null || true
+          find "$APP_IN_PAYLOAD"/Frameworks -maxdepth 1 \\( -name "*XCTest*" -o -name "*xctest*" \\) -exec rm -rf {} + 2>/dev/null || true
           ditto -c -k --sequesterRsrc --keepParent Payload UnsignedApp.ipa
           ls -lh UnsignedApp.ipa
           echo "IPA successfully created!"
