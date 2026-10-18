@@ -86,7 +86,9 @@ jobs:
           echo "Found Xcode Project: $XCODE_PROJ"
           echo "Found Xcode Workspace: $XCODE_SPACE"
 
-          mkdir -p build/DerivedData build/Products
+          # Do not set CONFIGURATION_BUILD_DIR — CocoaPods "[CP] Copy Pods Resources"
+          # expects bundles under DerivedData/Build/Products (AdsGlobalSDK.bundle etc.).
+          mkdir -p build/DerivedData
 
           pick_scheme() {
             local LIST="$1"
@@ -106,7 +108,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO
             CODE_SIGN_IDENTITY=
             ONLY_ACTIVE_ARCH=NO
-            CONFIGURATION_BUILD_DIR="$PWD/build/Products"
           )
 
           if [ -n "$XCODE_SPACE" ]; then
@@ -126,8 +127,6 @@ jobs:
 
           echo "=== Products tree (DerivedData) ==="
           find build/DerivedData/Build/Products -maxdepth 3 -print || true
-          echo "=== Products tree (CONFIGURATION_BUILD_DIR) ==="
-          find build/Products -maxdepth 3 -print || true
 
       - name: Package Unsigned .ipa
         run: |
@@ -138,7 +137,7 @@ jobs:
           echo "Searching for .app bundles..."
           find build -type d -name "*.app" -print || true
 
-          APP_PATH=$(find build/Products build/DerivedData/Build/Products -type d -name "SyndykCardGame.app" 2>/dev/null | head -n 1 || true)
+          APP_PATH=$(find build/DerivedData/Build/Products -type d -name "SyndykCardGame.app" 2>/dev/null | head -n 1 || true)
           if [ -z "$APP_PATH" ]; then
             APP_PATH=$(find build -type d -name "*.app" | grep -i 'iphoneos' | grep -v '/PlugIns/' | head -n 1 || true)
           fi
